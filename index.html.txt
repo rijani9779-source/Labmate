@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIM-LAB | Jadwal & Peminjaman Laboratorium</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    body { margin: 0; background: #f1f5f9; color: #1e293b; }
+    
+    /* Navbar & Role Switcher */
+    header { background: #1e3a8a; color: #fff; padding: 14px 28px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    header h1 { margin: 0; font-size: 18px; }
+    .role-box { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); padding: 6px 12px; border-radius: 8px; font-size: 13px; }
+    .role-box select { padding: 4px 8px; border-radius: 5px; border: none; font-weight: 600; color: #1e3a8a; cursor: pointer; }
+
+    /* Menu Navigasi Dinamis */
+    nav { background: #fff; border-bottom: 1px solid #cbd5e1; padding: 0 28px; display: flex; gap: 8px; overflow-x: auto; }
+    nav button { background: none; border: none; padding: 14px 18px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin: 0; width: auto; }
+    nav button.active { color: #1e3a8a; border-bottom-color: #2563eb; }
+
+    /* Kontainer Utama */
+    .container { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; padding: 22px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    h2 { margin-top: 0; font-size: 17px; color: #1e3a8a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
+
+    /* Statistik Ringkas */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .stat-card { background: #eff6ff; border-left: 4px solid #2563eb; padding: 14px; border-radius: 8px; }
+    .stat-card h3 { margin: 0; font-size: 22px; color: #1e3a8a; }
+    .stat-card p { margin: 4px 0 0; font-size: 12px; color: #475569; }
+
+    /* Form & Input */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    label { display: block; margin-top: 10px; font-size: 13px; font-weight: 600; }
+    input, select { width: 100%; padding: 9px 11px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+    .btn-primary { margin-top: 16px; padding: 10px 18px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: #1d4ed8; }
+
+    /* Alert */
+    .alert { margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; display: none; }
+    .alert.error { background: #fee2e2; color: #991b1b; display: block; }
+    .alert.success { background: #dcfce7; color: #166534; display: block; }
+
+    /* Tabel & Badge */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f8fafc; color: #475569; }
+    .badge { padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .Menunggu { background: #fef3c7; color: #92400e; }
+    .Disetujui { background: #dcfce7; color: #166534; }
+    .Ditolak { background: #fee2e2; color: #991b1b; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; border: none; border-radius: 5px; color: #fff; cursor: pointer; font-weight: 600; margin-right: 4px; }
+    .btn-acc { background: #10b981; }
+    .btn-rej { background: #ef4444; }
+    @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>SIM-LAB | Jadwal & Peminjaman Laboratorium</h1>
+  <div class="role-box">
+    <span>Mode Tampilan (POV):</span>
+    <select id="roleSelect" onchange="gantiRole()">
+      <option value="peminjam">Peminjam (Mahasiswa/Dosen)</option>
+      <option value="admin">Admin Laboratorium</option>
+    </select>
+  </div>
+</header>
+
+<!-- Bar Navigasi sesuai POV -->
+<nav id="navMenu"></nav>
+
+<!-- Area Konten Halaman -->
+<div class="container" id="appContent"></div>
+
+<script>
+  // Data Simulasi Awal
+  const dataAwal = [
+    { id: 101, peminjam: "Ahmad Fauzi", nim: "2210131210005", lab: "Lab Rekayasa Perangkat Lunak", tanggal: "2026-12-01", sesi: "08:00 - 10:00", keperluan: "Praktikum RPL", status: "Disetujui" },
+    { id: 102, peminjam: "Siti Aminah", nim: "2210131220014", lab: "Lab Jaringan Komputer", tanggal: "2026-12-02", sesi: "10:00 - 12:00", keperluan: "Simulasi Routing", status: "Menunggu" }
+  ];
+
+  let daftarData = JSON.parse(localStorage.getItem("simLabData")) || dataAwal;
+  let currentRole = "peminjam";
+  let currentMenu = "Beranda";
+
+  const menuConfig = {
+    peminjam: ["Beranda", "Jadwal", "Riwayat", "Profil"],
+    admin: ["Dashboard", "Jadwal", "Pengajuan", "Profil"]
+  };
+
+  function simpanStorage() {
+    localStorage.setItem("simLabData", JSON.stringify(daftarData));
+  }
+
+  function gantiRole() {
+    currentRole = document.getElementById("roleSelect").value;
+    currentMenu = menuConfig[currentRole][0];
+    renderNav();
+    renderHalaman();
+  }
+
+  function pindahMenu(menu) {
+    currentMenu = menu;
+    renderNav();
+    renderHalaman();
+  }
+
+  function renderNav() {
+    const nav = document.getElementById("navMenu");
+    nav.innerHTML = menuConfig[currentRole].map(m =>
+      `<button class="${m === currentMenu ? 'active' : ''}" onclick="pindahMenu('${m}')">${m}</button>`
+    ).join("");
+  }
+
+  function renderHalaman() {
+    const app = document.getElementById("appContent");
+
+    // 1. POV PEMINJAM: BERANDA
+    if (currentRole === "peminjam" && currentMenu === "Beranda") {
+      app.innerHTML = `
+        <div class="card">
+          <h2>Selamat Datang di SIM-LAB</h2>
+          <p style="font-size:14px; color:#475569;">Silakan cek ketersediaan jadwal atau ajukan peminjaman ruang laboratorium melalui formulir di bawah ini.</p>
+          <form id="formAjukan" onsubmit="prosesAjukan(event)">
+            <div class="form-grid">
+              <div>
+                <label>Pilih Laboratorium</label>
+                <select id="lab">
+                  <option value="Lab Rekayasa Perangkat Lunak">Lab Rekayasa Perangkat Lunak</option>
+                  <option value="Lab Jaringan Komputer">Lab Jaringan Komputer</option>
+                  <option value="Lab Multimedia">Lab Multimedia</option>
+                </select>
+              </div>
+              <div>
+                <label>Tanggal Peminjaman</label>
+                <input type="date" id="tanggal" required />
+              </div>
+              <div>
+                <label>Sesi Waktu</label>
+                <select id="sesi">
+                  <option value="08:00 - 10:00">Sesi 1 (08:00 - 10:00 WITA)</option>
+                  <option value="10:00 - 12:00">Sesi 2 (10:00 - 12:00 WITA)</option>
+                  <option value="13:30 - 15:30">Sesi 3 (13:30 - 15:30 WITA)</option>
+                </select>
+              </div>
+              <div>
+                <label>Keperluan</label>
+                <input type="text" id="keperluan" placeholder="Contoh: Praktikum / Rapat Himakom" required />
+              </div>
+            </div>
+            <button type="submit" class="btn-primary">Ajukan Peminjaman Lab</button>
+            <div id="pesanForm" class="alert"></div>
+          </form>
+        </div>`;
+    }
+
+    // 2. POV ADMIN: DASHBOARD
+    else if (currentRole === "admin" && currentMenu === "Dashboard") {
+      const total = daftarData.length;
+      const menunggu = daftarData.filter(d => d.status === "Menunggu").length;
+      const disetujui = daftarData.filter(d => d.status === "Disetujui").length;
+      app.innerHTML = `
+        <div class="stats">
+          <div class="stat-card"><h3>3</h3><p>Total Laboratorium Aktif</p></div>
+          <div class="stat-card"><h3>${menunggu}</h3><p>Pengajuan Menunggu Verifikasi</p></div>
+          <div class="stat-card"><h3>${disetujui}</h3><p>Jadwal Terverifikasi</p></div>
+          <div class="stat-card"><h3>${total}</h3><p>Total Transaksi Peminjaman</p></div>
+        </div>
+        <div class="card">
+          <h2>Ringkasan Aktivitas Terbaru</h2>
+          <p style="font-size:14px;">Buka menu <strong>Pengajuan</strong> untuk menyetujui atau menolak permohonan peminjaman ruangan yang masuk.</p>
+        </div>`;
+    }
+
+    // 3. MENU JADWAL (BISA DIAKSES PEMINJAM & ADMIN)
+    else if (currentMenu === "Jadwal") {
+      const jadwalAktif = daftarData.filter(d => d.status === "Disetujui");
+      app.innerHTML = `
+        <div class="card">
+          <h2>Jadwal Penggunaan Laboratorium (Terverifikasi)</h2>
+          <table>
+            <thead><tr><th>Laboratorium</th><th>Tanggal</th><th>Sesi</th><th>Penanggung Jawab</th><th>Kegiatan</th></tr></thead>
+            <tbody>
+              ${jadwalAktif.map(j => `
+                <tr>
+                  <td><strong>${j.lab}</strong></td>
+                  <td>${j.tanggal}</td>
+                  <td>${j.sesi}</td>
+                  <td>${j.peminjam}</td>
+                  <td>${j.keperluan}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    // 4. POV PEMINJAM: RIWAYAT
+    else if (currentRole === "peminjam" && currentMenu === "Riwayat") {
+      app.innerHTML = `
+        <div class="card">
+          <h2>Riwayat Pengajuan Peminjaman Saya</h2>
+          <table>
+            <thead><tr><th>Laboratorium</th><th>Tanggal & Sesi</th><th>Keperluan</th><th>Status</th></tr></thead>
+            <tbody>
+              ${daftarData.map(r => `
+                <tr>
+                  <td><strong>${r.lab}</strong></td>
+                  <td>${r.tanggal} (${r.sesi})</td>
+                  <td>${r.keperluan}</td>
+                  <td><span class="badge ${r.status}">${r.status}</span></td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    // 5. POV ADMIN: PENGAJUAN (VERIFIKASI)
+    else if (currentRole === "admin" && currentMenu === "Pengajuan") {
+      app.innerHTML = `
+        <div class="card">
+          <h2>Kelola Pengajuan Peminjaman Masuk</h2>
+          <table>
+            <thead><tr><th>Peminjam</th><th>Laboratorium</th><th>Waktu</th><th>Keperluan</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody>
+              ${daftarData.map((p, idx) => `
+                <tr>
+                  <td><strong>${p.peminjam}</strong><br><small>${p.nim}</small></td>
+                  <td>${p.lab}</td>
+                  <td>${p.tanggal}<br><small>${p.sesi}</small></td>
+                  <td>${p.keperluan}</td>
+                  <td><span class="badge ${p.status}">${p.status}</span></td>
+                  <td>
+                    ${p.status === "Menunggu" ? `
+                      <button class="btn-sm btn-acc" onclick="ubahStatus(${idx}, 'Disetujui')">Setujui</button>
+                      <button class="btn-sm btn-rej" onclick="ubahStatus(${idx}, 'Ditolak')">Tolak</button>
+                    ` : '-'}
+                  </td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    // 6. MENU PROFIL (SESUAI POV)
+    else if (currentMenu === "Profil") {
+      const isAdmin = currentRole === "admin";
+      app.innerHTML = `
+        <div class="card">
+          <h2>Profil Pengguna (${isAdmin ? "Admin Laboratorium" : "Peminjam"})</h2>
+          <table>
+            <tr><th style="width:200px;">Nama Lengkap</th><td>${isAdmin ? "Drs. Hendra Wijaya, M.Kom." : "Ahmad Fauzi"}</td></tr>
+            <tr><th>Nomor Induk (${isAdmin ? "NIP" : "NIM"})</th><td>${isAdmin ? "198504122010121002" : "2210131210005"}</td></tr>
+            <tr><th>Peran Sistem</th><td>${isAdmin ? "Administrator Lab" : "Mahasiswa / Peminjam"}</td></tr>
+            <tr><th>Program Studi</th><td>Pendidikan Komputer / Ilmu Komputer</td></tr>
+          </table>
+        </div>`;
+    }
+  }
+
+  // Logika Validasi Bentrok Jadwal
+  function prosesAjukan(e) {
+    e.preventDefault();
+    const lab = document.getElementById("lab").value;
+    const tanggal = document.getElementById("tanggal").value;
+    const sesi = document.getElementById("sesi").value;
+    const keperluan = document.getElementById("keperluan").value.trim();
+    const pesan = document.getElementById("pesanForm");
+
+    const bentrok = daftarData.some(item =>
+      item.lab === lab && item.tanggal === tanggal && item.sesi === sesi && item.status !== "Ditolak"
+    );
+
+    if (bentrok) {
+      pesan.className = "alert error";
+      pesan.textContent = "Gagal! Laboratorium sudah dibooking atau sedang diajukan pada jadwal tersebut.";
+      return;
+    }
+
+    daftarData.push({
+      id: Date.now(),
+      peminjam: "Ahmad Fauzi",
+      nim: "2210131210005",
+      lab, tanggal, sesi, keperluan,
+      status: "Menunggu"
+    });
+    simpanStorage();
+    pesan.className = "alert success";
+    pesan.textContent = "Berhasil! Pengajuan masuk ke daftar Riwayat dan menunggu verifikasi Admin.";
+    e.target.reset();
+  }
+
+  // Logika Verifikasi Admin
+  function ubahStatus(index, statusBaru) {
+    daftarData[index].status = statusBaru;
+    simpanStorage();
+    renderHalaman();
+  }
+
+  renderNav();
+  renderHalaman();
+</script>
+
+</body>
+</html>
